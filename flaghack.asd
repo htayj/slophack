@@ -8,6 +8,7 @@
                (:file "entities")
                (:file "gamestate")
                (:file "world")
+               (:file "burn")
                (:file "actions")
                (:file "ai")
                (:file "display")
