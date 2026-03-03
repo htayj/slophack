@@ -155,6 +155,14 @@
   (make-entity :key (gen-key) :at (make-pos x y z)
                :container "world" :tag :playa))
 
+;;; Signposts (camp signs, landmarks)
+(defstruct (signpost (:include entity) (:predicate nil))
+  (label "" :type string))
+
+(defun make-camp-sign (x y z label)
+  (make-signpost :key (gen-key) :at (make-pos x y z)
+                 :container "world" :tag :camp-sign :label label))
+
 ;;; Stairs for level transitions
 (defun make-stairs-down (x y z)
   (make-entity :key (gen-key) :at (make-pos x y z)
@@ -180,7 +188,7 @@
   '(:water :booze :milk :acid))
 
 (defparameter +terrain-tags+
-  '(:wall :tentwall :floor :tunnel :stairs-down :stairs-up :road :playa))
+  '(:wall :tentwall :floor :tunnel :stairs-down :stairs-up :road :playa :camp-sign))
 
 (defparameter +impassable-tags+
   '(:wall :tentwall))

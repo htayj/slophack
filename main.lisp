@@ -196,9 +196,12 @@
                (desc (if entities
                          (format nil "~{~a~^, ~}"
                                  (mapcar (lambda (e)
-                                           (if (creature-p e)
-                                               (format nil "~a (~a)" (entity-tag e) (creature-name e))
-                                               (string-downcase (symbol-name (entity-tag e)))))
+                                           (cond
+                                             ((creature-p e)
+                                              (format nil "~a (~a)" (entity-tag e) (creature-name e)))
+                                             ((typep e 'signpost)
+                                              (format nil "sign: ~a" (signpost-label e)))
+                                             (t (string-downcase (symbol-name (entity-tag e))))))
                                          entities))
                          "nothing")))
           (croatoan:add-string scr

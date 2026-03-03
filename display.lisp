@@ -58,6 +58,7 @@
       (:tunnel      (values #\# :white nil))
       (:road        (values #\# :yellow nil))
       (:playa       (values #\. :white nil))
+      (:camp-sign   (values #\* :cyan '(:bold)))
       (:stairs-down (values #\> :white '(:bold)))
       (:stairs-up   (values #\< :white '(:bold)))
       (:floor       (values #\. :white nil))
