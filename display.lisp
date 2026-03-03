@@ -55,6 +55,11 @@
                                         (terrain-variant entity)
                                         :none))))
          (values ch :blue nil)))
+      (:wooden-wall
+       (let ((ch (wall-variant-char (if (has-variant-p entity)
+                                        (terrain-variant entity)
+                                        :none))))
+         (values ch :yellow '(:bold))))
       (:tunnel      (values #\# :white nil))
       (:road        (values #\# :yellow nil))
       (:playa       (values #\. :white nil))

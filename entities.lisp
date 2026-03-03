@@ -147,6 +147,10 @@
   (make-entity :key (gen-key) :at (make-pos x y z)
                :container "world" :tag :tunnel))
 
+(defun make-wooden-wall (x y z &optional (variant :none))
+  (make-terrain :key (gen-key) :at (make-pos x y z)
+                :container "world" :tag :wooden-wall :variant variant))
+
 (defun make-road (x y z)
   (make-entity :key (gen-key) :at (make-pos x y z)
                :container "world" :tag :road))
@@ -188,10 +192,10 @@
   '(:water :booze :milk :acid))
 
 (defparameter +terrain-tags+
-  '(:wall :tentwall :floor :tunnel :stairs-down :stairs-up :road :playa :camp-sign))
+  '(:wall :tentwall :wooden-wall :floor :tunnel :stairs-down :stairs-up :road :playa :camp-sign))
 
 (defparameter +impassable-tags+
-  '(:wall :tentwall))
+  '(:wall :tentwall :wooden-wall))
 
 (defun creature-p (e)
   (member (entity-tag e) +creature-tags+))

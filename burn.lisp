@@ -283,7 +283,94 @@
         (when (and is-theme-camp (> placed 0) (< name-idx (length name-pool)))
           (let ((name (nth name-idx name-pool)))
             (world-set gs (make-camp-sign sx sy z name))
-            (incf name-idx)))))))
+            (incf name-idx)))))
+    zone-grid))
+
+;;; Effigy and Temple structures
+
+(defun find-road-near (road-grid target-x target-y search-radius)
+  "Find the nearest road tile to (target-x, target-y) within radius."
+  (let ((best-pos nil)
+        (best-dist most-positive-fixnum))
+    (loop for dy from (- search-radius) to search-radius do
+      (loop for dx from (- search-radius) to search-radius do
+        (let ((x (+ target-x dx))
+              (y (+ target-y dy))
+              (d (+ (* dx dx) (* dy dy))))
+          (when (and (= (grid-ref road-grid x y) 1)
+                     (< d best-dist))
+            (setf best-dist d
+                  best-pos (cons x y))))))
+    best-pos))
+
+(defun build-wooden-structure (gs zone-grid x y w h entrance-side z)
+  "Build a wooden-wall structure with floor inside. Returns interior floor positions.
+   Clears any existing terrain at the structure location."
+  (let ((x2 (+ x w -1))
+        (y2 (+ y h -1))
+        (entrance-pos (ecase entrance-side
+                        (:s (cons (+ x (floor w 2)) (+ y h -1)))
+                        (:n (cons (+ x (floor w 2)) y))
+                        (:e (cons (+ x w -1) (+ y (floor h 2))))
+                        (:w (cons x (+ y (floor h 2))))))
+        (floors nil))
+    ;; Clear existing entities in the structure footprint
+    (loop for fy from y to y2 do
+      (loop for fx from x to x2 do
+        (remove-entities-at gs (make-pos fx fy z))))
+    ;; Perimeter walls (skip entrance)
+    (loop for wx from x to x2 do
+      (unless (and (= wx (car entrance-pos)) (= y (cdr entrance-pos)))
+        (world-set gs (make-wooden-wall wx y z)))
+      (unless (and (= wx (car entrance-pos)) (= y2 (cdr entrance-pos)))
+        (world-set gs (make-wooden-wall wx y2 z))))
+    (loop for wy from (1+ y) below y2 do
+      (unless (and (= x (car entrance-pos)) (= wy (cdr entrance-pos)))
+        (world-set gs (make-wooden-wall x wy z)))
+      (unless (and (= x2 (car entrance-pos)) (= wy (cdr entrance-pos)))
+        (world-set gs (make-wooden-wall x2 wy z))))
+    ;; Floor inside
+    (loop for fy from (1+ y) below y2 do
+      (loop for fx from (1+ x) below x2 do
+        (world-set gs (make-floor-tile fx fy z))
+        (push (cons fx fy) floors)))
+    ;; Floor at entrance
+    (world-set gs (make-floor-tile (car entrance-pos) (cdr entrance-pos) z))
+    ;; Mark zone
+    (mark-zone zone-grid x y w h 2)
+    floors))
+
+(defun place-effigy-and-temple (gs road-grid zone-grid z)
+  "Place the effigy (west, with stairs down) and temple (east) on opposite ends."
+  (let* ((cx (floor +burn-width+ 2))
+         (cy (floor +burn-height+ 2))
+         ;; Find road tiles near the west and east ends
+         (west-road (find-road-near road-grid (- cx 80) cy 30))
+         (east-road (find-road-near road-grid (+ cx 80) cy 30)))
+    ;; Effigy — western end
+    (when west-road
+      (let* ((ex (- (car west-road) 5))
+             (ey (- (cdr west-road) 5))
+             (floors (build-wooden-structure gs zone-grid ex ey 10 8 :s z)))
+        ;; Sign
+        (world-set gs (make-camp-sign (car west-road) (cdr west-road) z "The Effigy"))
+        ;; Stairs down in the center
+        (when floors
+          (let ((center (nth (floor (length floors) 2) floors)))
+            (world-set gs (make-stairs-down (car center) (cdr center) z))))))
+    ;; Temple — eastern end
+    (when east-road
+      (let* ((tx (- (car east-road) 6))
+             (ty (- (cdr east-road) 5))
+             (floors (build-wooden-structure gs zone-grid tx ty 12 10 :s z)))
+        (declare (ignore floors))
+        ;; Sign
+        (world-set gs (make-camp-sign (car east-road) (cdr east-road) z "The Temple"))
+        ;; Temple has multiple entrances (open sides)
+        ;; Add a north entrance too
+        (let ((mid-x (+ tx 6)))
+          (remove-entities-at gs (make-pos mid-x ty z))
+          (world-set gs (make-floor-tile mid-x ty z)))))))
 
 ;;; Burn level construction
 
@@ -312,7 +399,9 @@
                           (make-road x y z)
                           (make-playa x y z)))))
     ;; Place theme camps and open camping along roads
-    (place-camps gs road-grid z)
-    ;; Wall variants for walls and tent walls
+    (let ((zone-grid (place-camps gs road-grid z)))
+      ;; Place effigy and temple on opposite ends
+      (place-effigy-and-temple gs road-grid zone-grid z))
+    ;; Wall variants for all wall types
     (apply-wall-variants gs)
     gs))

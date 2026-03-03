@@ -9,7 +9,8 @@
   "Check if there is a wall or tentwall at position (x,y,z)."
   (let ((entities (get-entities-at gs (make-pos x y z))))
     (some (lambda (e) (or (eq (entity-tag e) :wall)
-                          (eq (entity-tag e) :tentwall)))
+                          (eq (entity-tag e) :tentwall)
+                          (eq (entity-tag e) :wooden-wall)))
           entities)))
 
 (defun determine-wall-variant (entity gs)
@@ -57,13 +58,25 @@
     (maphash (lambda (k v)
                (declare (ignore k))
                (when (or (eq (entity-tag v) :wall)
-                         (eq (entity-tag v) :tentwall))
+                         (eq (entity-tag v) :tentwall)
+                         (eq (entity-tag v) :wooden-wall))
                  (push v walls)))
              (game-state-world gs))
     (dolist (w walls)
       (when (has-variant-p w)
         (let ((variant (determine-wall-variant w gs)))
           (setf (terrain-variant w) variant))))))
+
+(defun remove-entities-at (gs pos)
+  "Remove all entities at the given position."
+  (let (keys)
+    (maphash (lambda (k v)
+               (when (and (string= (entity-container v) "world")
+                          (pos-equal (entity-at v) pos))
+                 (push k keys)))
+             (game-state-world gs))
+    (dolist (k keys)
+      (world-remove gs k))))
 
 ;;; Terrain generation
 
