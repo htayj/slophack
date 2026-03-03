@@ -23,11 +23,21 @@ sbcl --eval '(require :asdf)' \
      --eval '(asdf:load-system :flaghack)' \
      --eval '(flaghack:run)'
 
+# Run without Swank
+sbcl --eval '(require :asdf)' \
+     --eval '(push #p"/home/tay/projects/cl/flaghack/" asdf:*central-registry*)' \
+     --eval '(asdf:load-system :flaghack)' \
+     --eval '(flaghack:run :swank nil)'
+
 # Compile-check only (non-interactive)
 sbcl --non-interactive --eval '(require :asdf)' \
      --eval '(push #p"/home/tay/projects/cl/flaghack/" asdf:*central-registry*)' \
      --eval '(asdf:load-system :flaghack)'
 ```
+
+## Live Development
+
+`(flaghack:run)` starts a Swank server on port 4005 by default. Connect from Emacs with `M-x slime-connect RET localhost RET 4005` to redefine functions, inspect state, and reload files while the game is running.
 
 ## Code Architecture
 

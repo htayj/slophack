@@ -15,10 +15,17 @@
 (defun determine-wall-variant (entity gs)
   (let* ((p (entity-at entity))
          (x (pos-x p)) (y (pos-y p)) (z (pos-z p))
+         ;; Cardinal neighbors
          (n  (wall-or-tentwall-at-p gs x (1- y) z))
          (s  (wall-or-tentwall-at-p gs x (1+ y) z))
          (e  (wall-or-tentwall-at-p gs (1+ x) y z))
-         (w  (wall-or-tentwall-at-p gs (1- x) y z)))
+         (w  (wall-or-tentwall-at-p gs (1- x) y z))
+         ;; Diagonal neighbors (used for corner disambiguation)
+         (ne (wall-or-tentwall-at-p gs (1+ x) (1- y) z))
+         (nw (wall-or-tentwall-at-p gs (1- x) (1- y) z))
+         (se (wall-or-tentwall-at-p gs (1+ x) (1+ y) z))
+         (sw (wall-or-tentwall-at-p gs (1- x) (1+ y) z)))
+    (declare (ignorable ne nw se sw))
     (cond
       ;; Four-way
       ((and n s e w) :cross)
@@ -38,7 +45,11 @@
       ;; Dead ends (treat as straight)
       ((or n s) :vertical)
       ((or e w) :horizontal)
-      ;; Isolated
+      ;; Isolated — check diagonals for context
+      (ne :bottom-left)
+      (nw :bottom-right)
+      (se :top-left)
+      (sw :top-right)
       (t :none))))
 
 (defun apply-wall-variants (gs)
@@ -108,7 +119,7 @@
 ;;; Campground level
 
 (defun campground-level ()
-  (let ((gs (make-game-state))
+  (let ((gs (make-game-state :heat (level-heat 0)))
         (z 0))
     ;; Perimeter and floors
     (add-entities gs (make-perimeter-walls +screen-width+ +screen-height+ z))
@@ -125,9 +136,21 @@
                            (make-flag 40 15 z)
                            (make-flag 60 10 z)
                            (make-water 15 12 z)
-                           (make-water 50 8 z)))
+                           (make-water 50 8 z)
+                           ;; Food scattered around
+                           (make-poptart 25 10 z)
+                           (make-trailmix 45 12 z)
+                           (make-bacon 65 14 z)
+                           ;; Drinks
+                           (make-booze 35 10 z)
+                           (make-milk 55 16 z)))
     ;; Creatures
-    (add-entities gs (list (make-hippie 12 12 z)))
+    (add-entities gs (list (make-hippie 12 12 z)
+                           (make-hippie 55 10 z "Sage")
+                           (make-acid-kop 70 3 z)
+                           (make-wook 20 15 z)))
+    ;; Stairs down to dungeon
+    (add-entities gs (list (make-stairs-down 38 10 z)))
     ;; Determine wall variants
     (apply-wall-variants gs)
     gs))
@@ -219,12 +242,77 @@
                     (carve-tunnel gs a b z)))
                 rng4))))))
 
-(defun bsp-gen-level (seed)
+(defun collect-floor-positions (gs)
+  "Collect all floor tile positions."
+  (let (positions)
+    (maphash (lambda (k v)
+               (declare (ignore k))
+               (when (eq (entity-tag v) :floor)
+                 (push (entity-at v) positions)))
+             (game-state-world gs))
+    positions))
+
+(defun random-floor-positions (gs n)
+  "Pick N random distinct floor positions."
+  (let* ((floors (collect-floor-positions gs))
+         (shuffled (sort (copy-list floors) (lambda (a b)
+                                               (declare (ignore a b))
+                                               (zerop (random 2))))))
+    (subseq shuffled 0 (min n (length shuffled)))))
+
+(defun populate-dungeon (gs z depth)
+  "Spawn creatures and items appropriate for dungeon depth."
+  (let ((positions (random-floor-positions gs (+ 10 (* depth 3)))))
+    (when (>= (length positions) 10)
+      (let ((i 0))
+        ;; Creatures — more and harder at deeper levels
+        (dotimes (_ (+ 1 depth))
+          (when (< i (length positions))
+            (let ((p (nth i positions)))
+              (world-set gs (make-ranger (pos-x p) (pos-y p) z)))
+            (incf i)))
+        (dotimes (_ (+ 1 (floor depth 2)))
+          (when (< i (length positions))
+            (let ((p (nth i positions)))
+              (world-set gs (make-lesser-egregore (pos-x p) (pos-y p) z)))
+            (incf i)))
+        (when (>= depth 2)
+          (when (< i (length positions))
+            (let ((p (nth i positions)))
+              (world-set gs (make-greater-egregore (pos-x p) (pos-y p) z)))
+            (incf i)))
+        ;; Items
+        (let ((item-fns (list #'make-poptart #'make-trailmix #'make-pancake
+                              #'make-bacon #'make-soup #'make-booze
+                              #'make-milk #'make-water #'make-acid-item)))
+          (dotimes (_ (+ 3 depth))
+            (when (< i (length positions))
+              (let* ((p (nth i positions))
+                     (fn (nth (random (length item-fns)) item-fns)))
+                (world-set gs (funcall fn (pos-x p) (pos-y p) z)))
+              (incf i))))
+        ;; Flags
+        (dotimes (_ 2)
+          (when (< i (length positions))
+            (let ((p (nth i positions)))
+              (world-set gs (make-flag (pos-x p) (pos-y p) z)))
+            (incf i)))))))
+
+(defun bsp-gen-level (seed &optional (z 1) (depth 1))
   "Generate a BSP dungeon level."
-  (let ((gs (make-game-state))
-        (z 0))
+  (let ((gs (make-game-state :heat (level-heat depth))))
     (add-entities gs (make-all-walls +screen-width+ +screen-height+ z))
     (bsp-split gs seed 0 +screen-width+ 0 +screen-height+ z 0)
+    ;; Populate with creatures and items
+    (populate-dungeon gs z depth)
+    ;; Add stairs back up
+    (let ((floor-pos (find-random-floor gs)))
+      (when floor-pos
+        (world-set gs (make-stairs-up (pos-x floor-pos) (pos-y floor-pos) z))))
+    ;; Add stairs down to deeper levels
+    (let ((floor-pos (find-random-floor gs)))
+      (when floor-pos
+        (world-set gs (make-stairs-down (pos-x floor-pos) (pos-y floor-pos) z))))
     (apply-wall-variants gs)
     gs))
 
